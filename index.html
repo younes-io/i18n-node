@@ -7,6 +7,7 @@
 
     <link rel="stylesheet" href="stylesheets/styles.css">
     <link rel="stylesheet" href="stylesheets/pygment_trac.css">
+    <script src="javascripts/scale.fix.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
     <!--[if lt IE 9]>
     <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
@@ -15,17 +16,18 @@
   <body>
     <div class="wrapper">
       <header>
-        <h1>I18n-node</h1>
-        <p>Lightweight simple translation module for node.js / express.js with dynamic json storage. Uses common __('...') syntax in app and templates.</p>
-
-        <p class="view"><a href="https://github.com/mashpie/i18n-node">View the Project on GitHub <small>mashpie/i18n-node</small></a></p>
-
+        <h1 class="header">I18n-node</h1>
+        <p class="header">Lightweight simple translation module for node.js / express.js with dynamic json storage. Uses common __('...') syntax in app and templates.</p>
 
         <ul>
-          <li><a href="https://github.com/mashpie/i18n-node/zipball/master">Download <strong>ZIP File</strong></a></li>
-          <li><a href="https://github.com/mashpie/i18n-node/tarball/master">Download <strong>TAR Ball</strong></a></li>
-          <li><a href="https://github.com/mashpie/i18n-node">View On <strong>GitHub</strong></a></li>
+          <li class="download"><a class="buttons" href="https://github.com/mashpie/i18n-node/zipball/master">Download ZIP</a></li>
+          <li class="download"><a class="buttons" href="https://github.com/mashpie/i18n-node/tarball/master">Download TAR</a></li>
+          <li><a class="buttons github" href="https://github.com/mashpie/i18n-node">View On GitHub</a></li>
         </ul>
+
+        <p class="header">This project is maintained by <a class="header name" href="https://github.com/mashpie">mashpie</a></p>
+
+
       </header>
       <section>
         <h1>i18n</h1>
@@ -50,70 +52,100 @@ No extra parsing needed.</p>
 
 <h2>Load</h2>
 
-<p>in your app.js</p>
+<div class="highlight"><pre>    <span class="c1">// load modules</span>
+    <span class="kd">var</span> <span class="nx">express</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s1">'express'</span><span class="p">),</span>
+        <span class="nx">i18n</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s2">"i18n"</span><span class="p">);</span>
+</pre></div>
 
-<pre><code>// load modules
-var express = require('express'),
-    i18n = require("i18n");
-</code></pre>
-
-<p>now you are ready to use <code>i18n.__('Hello')</code>.</p>
+<p>now you are ready to use a global <code>i18n.__('Hello')</code>. <strong>Global</strong> assumes you share a common state of localizsation in any time and any part of your app. This is usually fine in cli-style scripts. When serving responses to http requests you'll need to make sure that scope is <strong>NOT</strong> shared globally but attached to your request object.</p>
 
 <h2>Configure</h2>
 
-<p>use configure to setup these:</p>
+<p>Minimal example, just setup two locales</p>
+
+<pre><code>i18n.configure({
+    locales:['en', 'de']
+});
+</code></pre>
+
+<p>optionally register helpers to <em>global</em> scope in your cli. </p>
+
+<pre><code>i18n.configure({
+    locales:['en', 'de'],
+    register: global 
+});
+</code></pre>
+
+<p><strong>Be warned</strong>: Globals are only intended to get used in cli-like apps. To avoid concurency issues in server-like apps you'll need to attach helpers on your own to any kind of request- or response-object </p>
+
+<h3>list of configuration options</h3>
 
 <pre><code>i18n.configure({
     // setup some locales - other locales default to en silently
     locales:['en', 'de'],
 
-    // where to register __() and __n() to, might be "global" if you know what you are doing
-    register: global
+    // sets a custom cookie name to parse locale settings from
+    cookie: 'yourcookiename',
+
+    // where to store json files - defaults to './locales'
+    directory: './mylocales',
+
+    // whether to write new locale information to disk - defaults to true
+    updateFiles: false,
+
+    // setting extension of json files - defaults to '.js' (according to webtranslateit)
+    extension: '.json',
+
+    // enabled some debug output - defaults to false
+    debug: true
+
 });
 </code></pre>
 
-<p><strong>CAREFULL:</strong> as jade uses <code>__</code> as internal variable you need to register view helpers tweaked to your needs when used with jade.</p>
+<h2>Basic global use</h2>
 
-<h3>tweak helpers</h3>
+<p>In your app, when registered global:</p>
 
-<p>configure i18n without register: global</p>
-
-<pre><code>i18n.configure({
-    // setup some locales - other locales default to en silently
-    locales:['en', 'de'],
-});
+<pre><code>var greeting = __('Hello');
 </code></pre>
 
-<p>and register view helpers on your own</p>
+<p>in your app, when not registered to a specific object:</p>
 
-<pre><code>// register helpers for use in templates
-app.helpers({
-  __i: i18n.__,
-  __n: i18n.__n
-});
+<pre><code>var greeting = i18n.__('Hello');
 </code></pre>
 
-<h3>hook into express configure</h3>
+<h2>Example usage in express.js</h2>
 
-<p>in an express app, you might use i18n.init to gather language settings of your visitors, ie:</p>
+<p>In an express app, you might use i18n.init to gather language settings of your visitors and also bind your helpers to response object honoring request objects locale, ie:</p>
 
 <pre><code>// Configuration
 app.configure(function() {
 
     [...]
 
-    // using 'accept-language' header to guess language settings
+    // default: using 'accept-language' header to guess language settings
     app.use(i18n.init);
+
+    // binding template helpers to request (Credits to https://github.com/enyo #12)
+    app.use(function(req, res, next) {
+      res.locals.__ = function() {
+        return i18n.__.apply(req, arguments);
+      };
+      res.locals.__n = function() {
+        return i18n.__n.apply(req, arguments);
+      };
+    });
+
     app.use(app.router);
     app.use(express.static(__dirname + '/public'));
 });
 </code></pre>
 
-<h2>Use</h2>
+<p>in your app, when registered to a request object by <code>i18n.init</code>:</p>
 
-<p>in your app</p>
-
-<pre><code>var greeting = __('Hello');
+<pre><code>app.get('/de', function(req, res){
+  var greeting = req.__('Hello');
+});
 </code></pre>
 
 <p>in your template (depending on your template compiler)</p>
@@ -123,21 +155,25 @@ app.configure(function() {
 ${__('Hello')}
 </code></pre>
 
+<h2>Output parsing of expressions</h2>
+
+<p>As inspired by gettext there is currently support for sprintf-style expressions. Named parameters are on roadmap.</p>
+
 <h3>sprintf support</h3>
 
 <pre><code>var greeting = __('Hello %s, how are you today?', 'Marcus');
 </code></pre>
 
-<p>this puts <strong>Hello Marcus, how are you today?</strong>. You might add endless arguments and even nest it.</p>
+<p>this puts <em>Hello Marcus, how are you today?</em>. You might add endless arguments and even nest it.</p>
 
 <pre><code>var greeting = __('Hello %s, how are you today? How was your %s.', 'Marcus', __('weekend'));
 </code></pre>
 
-<p>which puts <strong>Hello Marcus, how are you today? How was your weekend.</strong></p>
+<p>which puts <em>Hello Marcus, how are you today? How was your weekend.</em></p>
 
 <h3>variable support</h3>
 
-<p>you might even use dynamic variables. They get added to the <code>en.js</code> file if not yet existing.</p>
+<p>you might even use dynamic variables as they get interpreted on the fly. Better make sure no user input finds it's way to that point as they all get added to the <code>en.js</code> file if not yet existing.</p>
 
 <pre><code>var greetings = ['Hi', 'Hello', 'Howdy'];        
 for (var i=0; i &lt; greetings.length; i++) {
@@ -152,7 +188,7 @@ Hello
 Howdy
 </code></pre>
 
-<h3>plural support</h3>
+<h3>basic plural support</h3>
 
 <p>different plural froms are supported as response to <code>count</code>:</p>
 
@@ -167,9 +203,11 @@ and again these could get nested:</p>
 var plural = __n('There is one monkey in the %%s', 'There are %d monkeys in the %%s', 3, 'tree');
 </code></pre>
 
-<p>putting <strong>There is one monkey in the tree</strong> or <strong>There are 3 monkeys in the tree</strong></p>
+<p>putting <em>There is one monkey in the tree</em> or <em>There are 3 monkeys in the tree</em></p>
 
 <h2>Storage</h2>
+
+<p>Will get modular support for different storage engines, currently just json files are stored in filesystem.</p>
 
 <h3>json file</h3>
 
@@ -215,9 +253,18 @@ var plural = __n('There is one monkey in the %%s', 'There are %d monkeys in the 
 }
 </code></pre>
 
+<p>remember to turn off automatic locale file updates:</p>
+
+<pre><code>i18n.configure({
+    updateFiles: false
+});
+</code></pre>
+
 <h2>Changelog</h2>
 
 <ul>
+<li>0.3.7: tests by mocha.js, added <code>this.locale</code> to <code>__</code> and <code>__n</code> </li>
+<li>0.3.6: travisCI, writeFileSync, devDependencies, jslint, MIT, fixed: #29, #9, merged: #25, #30, #43</li>
 <li>0.3.5: fixed some issues, prepared refactoring, prepared publishing to npm finally</li>
 <li>0.3.4: merged pull request #13 from Fuitad/master and updated README</li>
 <li>0.3.3: merged pull request from codders/master and modified for backward compatibility. Usage and tests pending</li>
@@ -226,14 +273,33 @@ var plural = __n('There is one monkey in the %%s', 'There are %d monkeys in the 
 <li>0.2.0: added plurals</li>
 <li>0.1.0: added tests</li>
 <li>0.0.1: start </li>
-</ul>
+</ul><h2>Licensed under MIT</h2>
+
+<p>Copyright (c) 2011-2013 Marcus Spiegel <a href="mailto:marcus.spiegel@gmail.com">marcus.spiegel@gmail.com</a></p>
+
+<p>Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:</p>
+
+<p>The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.</p>
+
+<p>THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.</p>
       </section>
       <footer>
-        <p>This project is maintained by <a href="https://github.com/mashpie">mashpie</a></p>
-        <p><small>Hosted on GitHub Pages &mdash; Theme by <a href="https://github.com/orderedlist">orderedlist</a></small></p>
+        <p><small>Hosted on <a href="https://pages.github.com">GitHub Pages</a> using the Dinky theme</small></p>
       </footer>
     </div>
-    <script src="javascripts/scale.fix.js"></script>
-    
+    <!--[if !IE]><script>fixScale(document);</script><![endif]-->
+		
   </body>
 </html>
